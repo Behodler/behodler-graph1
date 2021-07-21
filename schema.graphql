@@ -1,6 +1,24 @@
-type ExampleEntity @entity {
+type Swap @entity {
   id: ID!
-  count: BigInt!
-  owner: Bytes! # address
-  spender: Bytes! # address
+  transaction: String!#Transaction!
+  timestamp: BigInt! # need this to pull recent txns for specific token or pair
+  sender: Bytes!
+  inputTokenAddress: Bytes! # address
+  outputTokenAddress: Bytes! # address
+  inputAmount: BigDecimal!
+  outputAmount: BigDecimal!
+}
+
+type Token @entity
+{
+  # token address
+  id: ID!
+
+  # mirrored from the smart contract
+  symbol: String!
+  name: String!
+  decimals: BigInt!
+
+  # used for other stats like marketcap
+  totalSupply: BigInt!
 }

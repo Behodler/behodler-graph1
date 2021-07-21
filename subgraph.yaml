@@ -1,4 +1,6 @@
 specVersion: 0.0.2
+description: A single contract AMM with significantly reduced transaction fees based on logarithmic bonding curves.
+repository: https://github.com/Behodler/
 schema:
   file: ./schema.graphql
 dataSources:
@@ -6,25 +8,46 @@ dataSources:
     name: Behodler
     network: mainnet
     source:
-      address: "0x155ff1A85F440EE0A382eA949f24CE4E0b751c65"
+      address: "0x1B8568FbB47708E9E9D31Ff303254f748805bF21"
       abi: Behodler
-      startBlock: 10925585
+      startBlock: 11888118
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.4
       language: wasm/assemblyscript
       entities:
         - Approval
+        - Burn
+        - LiquidityAdded
+        - LiquidityWithdrawn
+        - Mint
         - OwnershipTransferred
+        - Swap
         - Transfer
       abis:
         - name: Behodler
           file: ./abis/Behodler.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+        - name: ERC20SymbolBytes
+          file: ./abis/ERC20SymbolBytes.json
+        - name: ERC20NameBytes
+          file: ./abis/ERC20NameBytes.json
       eventHandlers:
         - event: Approval(indexed address,indexed address,uint256)
           handler: handleApproval
+        - event: Burn(uint256)
+          handler: handleBurn
+        - event: LiquidityAdded(address,address,uint256,uint256)
+          handler: handleLiquidityAdded
+        - event: LiquidityWithdrawn(address,address,uint256,uint256)
+          handler: handleLiquidityWithdrawn
+        - event: Mint(address,address,uint256)
+          handler: handleMint
         - event: OwnershipTransferred(indexed address,indexed address)
           handler: handleOwnershipTransferred
+        - event: Swap(address,address,address,uint256,uint256)
+          handler: handleSwap
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
       file: ./src/mapping.ts
