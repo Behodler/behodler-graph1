@@ -186,8 +186,8 @@ export function handleSwap(event: Swap): void {
   swap.timestamp = event.block.timestamp
   swap.transaction = event.transaction.hash.toHexString()
   swap.sender = event.params.sender
-  swap.inputTokenAddress = event.params.inputToken
-  swap.outputTokenAddress = event.params.outputToken
+  swap.inputToken = token0.id
+  swap.outputToken = token1.id
   swap.inputAmount = inputAmount as BigDecimal
   swap.outputAmount = outputAmount as BigDecimal
 

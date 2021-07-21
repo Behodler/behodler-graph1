@@ -14,18 +14,24 @@ Get a list of all tokens ever used in swaps
 }
 ```
 
-Get a list of all swaps
+Get a list of all swaps, most recent first
 ```
 {
-  swaps{
+  swaps(orderBy: timestamp, orderDirection: desc){
     id
     transaction
-  	timestamp
-  	sender
-  	inputTokenAddress
-  	outputTokenAddress
-  	inputAmount
-  	outputAmount
+    timestamp
+    sender
+    inputToken {
+      id
+      symbol
+    }
+    outputToken {
+      id
+      symbol
+    }
+    inputAmount
+    outputAmount
   }
 }
 ```

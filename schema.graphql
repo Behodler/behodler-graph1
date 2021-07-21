@@ -3,8 +3,10 @@ type Swap @entity {
   transaction: String!#Transaction!
   timestamp: BigInt! # need this to pull recent txns for specific token or pair
   sender: Bytes!
-  inputTokenAddress: Bytes! # address
-  outputTokenAddress: Bytes! # address
+  inputToken: Token!
+  outputToken: Token!
+  #inputTokenAddress: Bytes! # address
+  #outputTokenAddress: Bytes! # address
   inputAmount: BigDecimal!
   outputAmount: BigDecimal!
 }
