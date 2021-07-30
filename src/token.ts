@@ -8,13 +8,21 @@ import { ERC20 } from '../generated/Behodler/ERC20'
 import { ERC20SymbolBytes } from '../generated/Behodler/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../generated/Behodler/ERC20NameBytes'
 import { Token } from "../generated/schema"
-import { convertToDecimal, ZERO_BD, ZERO_BI } from "./math"
+import { convertToDecimal, ZERO_BD, ZERO_BI, ONE_BD } from "./math"
 
 
 
 export const WETH10_ADDRESS = "0x4f5704d9d2cbccaf11e70b34048d41a0d572993f"
 export const WETH_ADDRESS   = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 export const DAI_ADDRESS    = "0x6b175474e89094c44da98b954eedeac495271d0f"
+
+export function isETH(token: Token): boolean {
+  return token.id == WETH10_ADDRESS || token.id == WETH_ADDRESS
+}
+
+export function isUSD(token: Token) : boolean {
+  return token.id == DAI_ADDRESS
+}
 
 export function getToken(tokenAddress: Address): Token | null {
 
@@ -36,9 +44,21 @@ export function getToken(tokenAddress: Address): Token | null {
     }
 
     token.decimals = decimals
-    token.eth = ZERO_BD
-    token.timestamp = ZERO_BI
-    token.block = ZERO_BI
+    if(isETH(<Token>token)){
+      token.eth = ONE_BD
+    } else {
+      token.eth = ZERO_BD
+    }
+    token.ethtimestamp = ZERO_BI
+    token.ethblock = ZERO_BI
+
+    if(isUSD(<Token>token)){
+      token.usd = ONE_BD
+    } else {
+      token.usd = ZERO_BD
+    }
+    token.usdtimestamp = ZERO_BI
+    token.usdblock = ZERO_BI
     /*
     token0.tradeVolume = ZERO_BD
     token0.tradeVolumeUSD = ZERO_BD

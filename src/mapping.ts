@@ -1,4 +1,4 @@
-import { log, BigInt, BigDecimal} from '@graphprotocol/graph-ts'
+import { log, BigInt, BigDecimal, ethereum} from '@graphprotocol/graph-ts'
 import {
   Behodler,
   Approval,
@@ -14,7 +14,7 @@ import {
   Token,
   Swap as SwapEvent
 } from "../generated/schema"
-import { getToken } from "./token"
+import { getToken, isETH, isUSD } from "./token"
 import { convertToDecimal, ZERO_BD, ZERO_BI } from "./math"
 
 let DEFAULT_DECIMAL = BigInt.fromI32(18)
@@ -119,11 +119,11 @@ export function handleSwap(event: Swap): void {
     return
   }
 
+
   // convert values to float
   let inputAmount = convertToDecimal(event.params.inputValue, token0.decimals)
   let outputAmount = convertToDecimal(event.params.outputValue, token1.decimals)
 
-  // check for price signals
 
   swap.timestamp = event.block.timestamp
   swap.transaction = event.transaction.hash.toHexString()
@@ -134,6 +134,11 @@ export function handleSwap(event: Swap): void {
   swap.outputAmount = outputAmount as BigDecimal
 
   swap.save()
+
+  // check for price signals
+  updateETHPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
+  updateUSDPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
+
   /*
   address sender,
   address inputToken,
@@ -143,6 +148,72 @@ export function handleSwap(event: Swap): void {
   */
 
 
+}
+
+function updateETHPrice(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, block: ethereum.Block): void {
+  if(isETH(token0)){
+    token1.eth = inputAmount / outputAmount
+    token1.ethtimestamp = block.timestamp
+    token1.ethblock = block.number
+
+    token1.save()
+  } else if(isETH(token1)){
+    token0.eth = outputAmount / inputAmount
+    token0.ethtimestamp = block.timestamp
+    token0.ethblock = block.number
+
+    token0.save()
+  } else if(token0.ethblock !== null || token1.ethblock !== null){
+
+    // propagate eth price between tokens from more recent blocks
+    if(<BigInt>token0.ethblock > <BigInt>token1.ethblock) {
+      token1.eth = (token0.eth *  inputAmount) / outputAmount
+      token1.ethblock = token0.ethblock
+      token1.ethtimestamp = token0.ethtimestamp
+
+      token1.save()
+
+    } else if(<BigInt>token1.ethblock > <BigInt>token0.ethblock) {
+      token0.eth = (token1.eth * outputAmount) / inputAmount
+      token0.ethblock = token1.ethblock
+      token0.ethtimestamp = token1.ethtimestamp
+
+      token0.save()
+    }
+  }
+}
+
+function updateUSDPrice(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, block: ethereum.Block): void {
+  if(isUSD(token0)){
+    token1.usd = inputAmount / outputAmount
+    token1.usdtimestamp = block.timestamp
+    token1.usdblock = block.number
+
+    token1.save()
+  } else if(isUSD(token1)){
+    token0.usd = outputAmount / inputAmount
+    token0.usdtimestamp = block.timestamp
+    token0.usdblock = block.number
+
+    token0.save()
+  } else if(token0.usdblock !== null || token1.usdblock !== null){
+
+    // propagate eth price between tokens from more recent blocks
+    if(<BigInt>token0.usdblock > <BigInt>token1.usdblock) {
+      token1.usd = (token0.usd * inputAmount) / outputAmount
+      token1.usdblock = token0.usdblock
+      token1.usdtimestamp = token0.usdtimestamp
+
+      token1.save()
+
+    } else if(<BigInt>token1.usdblock > <BigInt>token0.usdblock) {
+      token0.usd = (token1.usd * outputAmount) / inputAmount
+      token0.usdblock = token1.usdblock
+      token0.usdtimestamp = token1.usdtimestamp
+
+      token0.save()
+    }
+  }
 }
 
 export function handleTransfer(event: Transfer): void {}

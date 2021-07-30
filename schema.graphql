@@ -28,8 +28,13 @@ type Token @entity
   eth: BigDecimal
 
   # last update time for eth value
-  timestamp: BigInt
+  ethtimestamp: BigInt
 
   # last update block for eth value
-  block: BigInt
+  ethblock: BigInt
+
+  # latest value in USD
+  usd: BigDecimal
+  usdtimestamp: BigInt
+  usdblock: BigInt
 }

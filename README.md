@@ -9,7 +9,8 @@ Get a list of all tokens ever used in swaps
     id
     name
     symbol
-    decimals
+    eth
+    usd
   }
 }
 ```
