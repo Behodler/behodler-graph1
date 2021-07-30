@@ -1,5 +1,5 @@
 // code adapted from uniswap
-
+import { log, BigInt, BigDecimal} from '@graphprotocol/graph-ts'
 import {
   Address,
   BigInt,
@@ -7,6 +7,54 @@ import {
 import { ERC20 } from '../generated/Behodler/ERC20'
 import { ERC20SymbolBytes } from '../generated/Behodler/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../generated/Behodler/ERC20NameBytes'
+import { Token } from "../generated/schema"
+import { convertToDecimal, ZERO_BD, ZERO_BI } from "./math"
+
+
+
+export const WETH10_ADDRESS = "0x4f5704d9d2cbccaf11e70b34048d41a0d572993f"
+export const WETH_ADDRESS   = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+export const DAI_ADDRESS    = "0x6b175474e89094c44da98b954eedeac495271d0f"
+
+export function getToken(tokenAddress: Address): Token | null {
+
+  // try loading an existing token
+  let token = Token.load(tokenAddress.toHexString())
+
+  // new token?
+  if (token === null) {
+    // yes, fetch info and create new token
+    token = new Token(tokenAddress.toHexString())
+    token.symbol = fetchTokenSymbol(tokenAddress)
+    token.name = fetchTokenName(tokenAddress)
+    token.totalSupply = fetchTokenTotalSupply(tokenAddress)
+    let decimals = fetchTokenDecimals(tokenAddress)
+
+    if (decimals === null) {
+      log.debug('BUG: the decimal on token 0 was null', [])
+      return null
+    }
+
+    token.decimals = decimals
+    token.eth = ZERO_BD
+    token.timestamp = ZERO_BI
+    token.block = ZERO_BI
+    /*
+    token0.tradeVolume = ZERO_BD
+    token0.tradeVolumeUSD = ZERO_BD
+    token0.untrackedVolumeUSD = ZERO_BD
+    token0.totalLiquidity = ZERO_BD
+    // token0.allPairs = []
+    token0.txCount = ZERO_BI
+    */
+
+    token.save()
+  }
+
+  return token
+
+}
+
 
 // Store information about tokens that may not be available through other means
 export class StaticToken {
@@ -28,13 +76,22 @@ export class StaticToken {
     let staticDefinitions = new Array<StaticToken>(1)
 
     // Maker
-    let tokenMaker = new StaticToken(
+    let token = new StaticToken(
       Address.fromString('0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2'),
       'MKR',
       'Maker',
       BigInt.fromI32(18)
     )
-    staticDefinitions.push(tokenMaker)
+    staticDefinitions.push(token)
+
+    // Kleros
+    token = new StaticToken(
+      Address.fromString('0x93ed3fbe21207ec2e8f2d3c3de6e058cb73bc04d'),
+      'PNK',
+      'Kleros', // contract returns 'Pinakion'
+      BigInt.fromI32(18)
+    )
+    staticDefinitions.push(token)
 
     return staticDefinitions
   }

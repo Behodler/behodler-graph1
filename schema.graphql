@@ -1,12 +1,12 @@
 type Swap @entity {
   id: ID!
+  # transaction from block
   transaction: String!#Transaction!
-  timestamp: BigInt! # need this to pull recent txns for specific token or pair
+  # timestamp from block seconds since epoch
+  timestamp: BigInt!
   sender: Bytes!
   inputToken: Token!
   outputToken: Token!
-  #inputTokenAddress: Bytes! # address
-  #outputTokenAddress: Bytes! # address
   inputAmount: BigDecimal!
   outputAmount: BigDecimal!
 }
@@ -23,4 +23,13 @@ type Token @entity
 
   # used for other stats like marketcap
   totalSupply: BigInt!
+
+  # latest value in ETH
+  eth: BigDecimal
+
+  # last update time for eth value
+  timestamp: BigInt
+
+  # last update block for eth value
+  block: BigInt
 }
