@@ -4,7 +4,8 @@ Subgraph definition for Behodler for The Graph
 example queries:
 
 Get a list of all tokens ever used in swaps
-```{
+```
+{
   tokens{
     id
     name

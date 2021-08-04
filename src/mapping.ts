@@ -12,10 +12,11 @@ import {
 } from "../generated/Behodler/Behodler"
 import {
   Token,
-  Swap as SwapEvent
+  Swap as SwapEvent,
+  Behodler as BehodlerEntity
 } from "../generated/schema"
 import { getToken, isETH, isUSD } from "./token"
-import { convertToDecimal, ZERO_BD, ZERO_BI } from "./math"
+import { convertToDecimal, ZERO_BD, ZERO_BI, TWO_BD } from "./math"
 
 let DEFAULT_DECIMAL = BigInt.fromI32(18)
 
@@ -125,6 +126,7 @@ export function handleSwap(event: Swap): void {
   let outputAmount = convertToDecimal(event.params.outputValue, token1.decimals)
 
 
+  // update values for swap and save
   swap.timestamp = event.block.timestamp
   swap.transaction = event.transaction.hash.toHexString()
   swap.sender = event.params.sender
@@ -139,6 +141,8 @@ export function handleSwap(event: Swap): void {
   updateETHPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
   updateUSDPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
 
+  updateVolume(<Token>token0, <Token>token1, inputAmount, outputAmount)
+
   /*
   address sender,
   address inputToken,
@@ -150,66 +154,161 @@ export function handleSwap(event: Swap): void {
 
 }
 
+/**
+ * Update the volume information for both tokens based on a swap.
+ */
+function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal): void {
+
+  let behodler = BehodlerEntity.load('1')
+
+  if(behodler == null){
+    behodler = new BehodlerEntity('1')
+    behodler.ethVolume = ZERO_BD
+    behodler.usdVolume = ZERO_BD
+    behodler.ethLiquidity = ZERO_BD
+    behodler.usdLiquidity = ZERO_BD
+  }
+
+  token0.volume += inputAmount
+  token1.volume += outputAmount
+
+  let inputVolume = inputAmount*<BigDecimal>token0.eth
+  let outputVolume = outputAmount*<BigDecimal>token1.eth
+
+
+  if(inputVolume > ZERO_BD && outputVolume > ZERO_BD){
+    // volume amounts should theoretically be the same, but in practice won't be
+    // we average to get a better approximation to the actual value
+    token0.ethVolume += (inputVolume + outputVolume) / TWO_BD
+    token1.ethVolume += (inputVolume + outputVolume) / TWO_BD
+
+    behodler.ethVolume += (inputVolume + outputVolume) / TWO_BD
+
+  } else if(inputVolume > ZERO_BD){
+    // this section does something useful in case one token doesn't have an eth value yet
+    token0.ethVolume += inputVolume
+    token1.ethVolume += inputVolume
+
+    behodler.ethVolume += inputVolume
+  } else if(outputVolume > ZERO_BD){
+    token0.ethVolume += outputVolume
+    token1.ethVolume += outputVolume
+
+    behodler.ethVolume += outputVolume
+  }
+
+  inputVolume = inputAmount*<BigDecimal>token0.usd
+  outputVolume = outputAmount*<BigDecimal>token1.usd
+
+  if(inputVolume > ZERO_BD && outputVolume > ZERO_BD){
+    // volume amounts should theoretically be the same, but in practice won't be
+    // we average to get a better approximation to the actual value
+    token0.usdVolume += (inputVolume + outputVolume) / TWO_BD
+    token1.usdVolume += (inputVolume + outputVolume) / TWO_BD
+
+    behodler.usdVolume += (inputVolume + outputVolume) / TWO_BD
+
+  } else if(inputVolume > ZERO_BD){
+    token0.usdVolume += inputVolume
+    token1.usdVolume += inputVolume
+
+    behodler.usdVolume += inputVolume
+  } else if(outputVolume > ZERO_BD){
+    token0.usdVolume += outputVolume
+    token1.usdVolume += outputVolume
+
+    behodler.usdVolume += outputVolume
+  }
+
+  token0.save()
+  token1.save()
+
+  behodler.save()
+}
+
+/**
+ * Update price for a token in ether, if possible.
+ *
+ * Will update price for a token if the other is ETH or has a more recent
+ * update block for it's price. Also records the block number for the price update.
+ */
 function updateETHPrice(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, block: ethereum.Block): void {
+
+  // is the first token ETH?
   if(isETH(token0)){
+    // yes, update the other token
     token1.eth = inputAmount / outputAmount
-    token1.ethtimestamp = block.timestamp
-    token1.ethblock = block.number
+    token1.ethTimestamp = block.timestamp
+    token1.ethBlock = block.number
 
     token1.save()
   } else if(isETH(token1)){
+    // second token is ETH, update first
     token0.eth = outputAmount / inputAmount
-    token0.ethtimestamp = block.timestamp
-    token0.ethblock = block.number
+    token0.ethTimestamp = block.timestamp
+    token0.ethBlock = block.number
 
     token0.save()
-  } else if(token0.ethblock !== null || token1.ethblock !== null){
+  } else if(token0.ethBlock !== null || token1.ethBlock !== null){
+    // neither is ETH, check last update block
 
     // propagate eth price between tokens from more recent blocks
-    if(<BigInt>token0.ethblock > <BigInt>token1.ethblock) {
+    if(<BigInt>token0.ethBlock > <BigInt>token1.ethBlock) {
       token1.eth = (token0.eth *  inputAmount) / outputAmount
-      token1.ethblock = token0.ethblock
-      token1.ethtimestamp = token0.ethtimestamp
+      token1.ethBlock = token0.ethBlock
+      token1.ethTimestamp = token0.ethTimestamp
 
       token1.save()
 
-    } else if(<BigInt>token1.ethblock > <BigInt>token0.ethblock) {
+    } else if(<BigInt>token1.ethBlock > <BigInt>token0.ethBlock) {
       token0.eth = (token1.eth * outputAmount) / inputAmount
-      token0.ethblock = token1.ethblock
-      token0.ethtimestamp = token1.ethtimestamp
+      token0.ethBlock = token1.ethBlock
+      token0.ethTimestamp = token1.ethTimestamp
 
       token0.save()
     }
   }
 }
 
+/**
+ * Update price for a token in USD, if possible.
+ *
+ * Will update price for a token if the other is a USD stablecoin or has a
+ * more recent update block for it's price. Also records the block number
+ * for the price update.
+ */
 function updateUSDPrice(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, block: ethereum.Block): void {
+
+  // is the first token USD?
   if(isUSD(token0)){
+    // yes, update second token
     token1.usd = inputAmount / outputAmount
-    token1.usdtimestamp = block.timestamp
-    token1.usdblock = block.number
+    token1.usdTimestamp = block.timestamp
+    token1.usdBlock = block.number
 
     token1.save()
   } else if(isUSD(token1)){
+    // second token is USD, update first
     token0.usd = outputAmount / inputAmount
-    token0.usdtimestamp = block.timestamp
-    token0.usdblock = block.number
+    token0.usdTimestamp = block.timestamp
+    token0.usdBlock = block.number
 
     token0.save()
-  } else if(token0.usdblock !== null || token1.usdblock !== null){
+  } else if(token0.usdBlock !== null || token1.usdBlock !== null){
+    // neither is USD, check last update block
 
-    // propagate eth price between tokens from more recent blocks
-    if(<BigInt>token0.usdblock > <BigInt>token1.usdblock) {
+    // propagate usd price between tokens from more recent blocks
+    if(<BigInt>token0.usdBlock > <BigInt>token1.usdBlock) {
       token1.usd = (token0.usd * inputAmount) / outputAmount
-      token1.usdblock = token0.usdblock
-      token1.usdtimestamp = token0.usdtimestamp
+      token1.usdBlock = token0.usdBlock
+      token1.usdTimestamp = token0.usdTimestamp
 
       token1.save()
 
-    } else if(<BigInt>token1.usdblock > <BigInt>token0.usdblock) {
+    } else if(<BigInt>token1.usdBlock > <BigInt>token0.usdBlock) {
       token0.usd = (token1.usd * outputAmount) / inputAmount
-      token0.usdblock = token1.usdblock
-      token0.usdtimestamp = token1.usdtimestamp
+      token0.usdBlock = token1.usdBlock
+      token0.usdTimestamp = token1.usdTimestamp
 
       token0.save()
     }

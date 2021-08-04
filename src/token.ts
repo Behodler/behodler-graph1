@@ -49,16 +49,22 @@ export function getToken(tokenAddress: Address): Token | null {
     } else {
       token.eth = ZERO_BD
     }
-    token.ethtimestamp = ZERO_BI
-    token.ethblock = ZERO_BI
+    token.ethTimestamp = ZERO_BI
+    token.ethBlock = ZERO_BI
 
     if(isUSD(<Token>token)){
       token.usd = ONE_BD
     } else {
       token.usd = ZERO_BD
     }
-    token.usdtimestamp = ZERO_BI
-    token.usdblock = ZERO_BI
+    token.usdTimestamp = ZERO_BI
+    token.usdBlock = ZERO_BI
+
+
+    token.volume = ZERO_BD
+    token.usdVolume = ZERO_BD
+    token.ethVolume = ZERO_BD
+
     /*
     token0.tradeVolume = ZERO_BD
     token0.tradeVolumeUSD = ZERO_BD
