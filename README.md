@@ -39,6 +39,37 @@ Get a list of all swaps, most recent first
 ```
 
 
+Get total swap volume (all swaps) and current liquidity
+```
+{
+  behodler(id:1)
+    {
+      ethVolume
+      usdVolume
+      ethLiquidity
+      usdLiquidity
+    }
+}
+```
+
+Get a list of all liquidity transactions, most recent first
+```
+{
+  liquidities(orderBy: timestamp, orderDirection: desc){
+    id
+    timestamp
+    direction
+    token {
+      id
+      symbol
+    }
+    amount
+    scx
+  }
+}
+```
+
+
 # Development
 
 Adapted from the [documentation](https://thegraph.com/docs/developer/quick-start)

@@ -1,26 +1,32 @@
-import { log, BigInt, BigDecimal, ethereum} from '@graphprotocol/graph-ts'
+import { log, BigInt, BigDecimal, Address, ethereum} from '@graphprotocol/graph-ts'
 import {
   Behodler,
   Approval,
   Burn,
-  LiquidityAdded,
-  LiquidityWithdrawn,
+  LiquidityAdded as LiquidityAddedEvent,
+  LiquidityWithdrawn as LiquidityWithdrawnEvent,
   Mint,
   OwnershipTransferred,
-  Swap,
+  Swap as SwapEvent,
   Transfer
 } from "../generated/Behodler/Behodler"
 import {
   Token,
-  Swap as SwapEvent,
+  Swap,
+  Liquidity,
   Behodler as BehodlerEntity
 } from "../generated/schema"
-import { getToken, isETH, isUSD } from "./token"
+import { getToken, isETH, isUSD, SCX_ADDRESS } from "./token"
 import { convertToDecimal, ZERO_BD, ZERO_BI, TWO_BD } from "./math"
 
 let DEFAULT_DECIMAL = BigInt.fromI32(18)
 
 /*
+
+The following is basic documentation about how to write mappings in The Graph
+It includes an example function 'handleApproval' and some basic operations
+
+
 export function handleApproval(event: Approval): void {
   // Entities can be loaded from the store using a string ID; this ID
   // needs to be unique across all entities of the same type
@@ -90,17 +96,106 @@ export function handleApproval(event: Approval): void {}
 
 export function handleBurn(event: Burn): void {}
 
-export function handleLiquidityAdded(event: LiquidityAdded): void {}
+export function handleLiquidityAdded(event: LiquidityAddedEvent): void {
 
-export function handleLiquidityWithdrawn(event: LiquidityWithdrawn): void {}
+  /*
+    event LiquidityAdded(
+        address sender,
+        address token,
+        uint256 tokenValue,
+        uint256 scx
+    )
+    */
+  let liquidity = new Liquidity(event.transaction.hash.toHexString())
+
+  let token = getToken(event.params.token)
+
+  let amount = convertToDecimal(event.params.tokenValue, token.decimals)
+
+  let scxAmount = convertToDecimal(event.params.scx, DEFAULT_DECIMAL)
+
+
+  liquidity.direction = "Add"
+  liquidity.token = token.id
+  liquidity.amount = amount
+  liquidity.scx = scxAmount
+
+  liquidity.transaction = event.transaction.hash.toHexString()
+  liquidity.timestamp = event.block.timestamp
+
+  liquidity.save()
+
+
+  // look for ETH and USD exchanges to calculate SCX price
+  let scxToken = getToken(Address.fromString(SCX_ADDRESS))
+
+  updateETHPrice(<Token>scxToken, <Token>token, scxAmount, amount, event.block)
+  updateUSDPrice(<Token>scxToken, <Token>token, scxAmount, amount, event.block)
+
+  //updateVolume(<Token>token, <Token>scxToken, amount, scxAmount)
+
+  scxToken.save()
+}
+
+export function handleLiquidityWithdrawn(event: LiquidityWithdrawnEvent): void {
+
+  /*
+    event LiquidityWithdrawn(
+        address recipient,
+        address token,
+        uint256 tokenValue,
+        uint256 scx
+    )
+  */
+  let liquidity = new Liquidity(event.transaction.hash.toHexString())
+
+  let token = getToken(event.params.token)
+
+  let amount = convertToDecimal(event.params.tokenValue, token.decimals)
+
+  let scxAmount = convertToDecimal(event.params.scx, DEFAULT_DECIMAL)
+
+
+  liquidity.direction = "Withdraw"
+  liquidity.token = token.id
+  liquidity.amount = amount
+  liquidity.scx = scxAmount
+
+
+  liquidity.transaction = event.transaction.hash.toHexString()
+  liquidity.timestamp = event.block.timestamp
+
+  liquidity.save()
+
+
+  // look for ETH and USD exchanges to calculate SCX price
+  let scxToken = getToken(Address.fromString(SCX_ADDRESS))
+
+  updateETHPrice(<Token>token, <Token>scxToken, amount, scxAmount, event.block)
+  updateUSDPrice(<Token>token, <Token>scxToken, amount, scxAmount, event.block)
+
+  //updateVolume(<Token>token, <Token>scxToken, amount, scxAmount)
+
+  scxToken.save()
+
+
+}
+
 
 export function handleMint(event: Mint): void {}
 
 export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
 
-export function handleSwap(event: Swap): void {
+export function handleSwap(event: SwapEvent): void {
 
-  let swap = new SwapEvent(event.transaction.hash.toHexString())
+  /* SwapEvent, event.params: (from the Behodler contract)
+      address sender,
+      address inputToken,
+      address outputToken,
+      uint256 inputValue,
+      uint256 outputValue
+  */
+  let swap = new Swap(event.transaction.hash.toHexString())
 
   /*
   let swap = new SwapEvent(
@@ -143,16 +238,12 @@ export function handleSwap(event: Swap): void {
 
   updateVolume(<Token>token0, <Token>token1, inputAmount, outputAmount)
 
-  /*
-  address sender,
-  address inputToken,
-  address outputToken,
-  uint256 inputValue,
-  uint256 outputValue
-  */
 
 
 }
+
+export function handleTransfer(event: Transfer): void {}
+
 
 /**
  * Update the volume information for both tokens based on a swap.
@@ -161,6 +252,7 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
 
   let behodler = BehodlerEntity.load('1')
 
+  // if we haven't ever created the static Behodler singleton, create it now
   if(behodler == null){
     behodler = new BehodlerEntity('1')
     behodler.ethVolume = ZERO_BD
@@ -175,7 +267,6 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
   let inputVolume = inputAmount*<BigDecimal>token0.eth
   let outputVolume = outputAmount*<BigDecimal>token1.eth
 
-
   if(inputVolume > ZERO_BD && outputVolume > ZERO_BD){
     // volume amounts should theoretically be the same, but in practice won't be
     // we average to get a better approximation to the actual value
@@ -185,7 +276,7 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
     behodler.ethVolume += (inputVolume + outputVolume) / TWO_BD
 
   } else if(inputVolume > ZERO_BD){
-    // this section does something useful in case one token doesn't have an eth value yet
+    // this section uses a single volume value in case one token doesn't have an eth value yet
     token0.ethVolume += inputVolume
     token1.ethVolume += inputVolume
 
@@ -197,6 +288,7 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
     behodler.ethVolume += outputVolume
   }
 
+  // Do the same thing for USD
   inputVolume = inputAmount*<BigDecimal>token0.usd
   outputVolume = outputAmount*<BigDecimal>token1.usd
 
@@ -209,6 +301,7 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
     behodler.usdVolume += (inputVolume + outputVolume) / TWO_BD
 
   } else if(inputVolume > ZERO_BD){
+    // this section uses a single volume value in case one token doesn't have a usd value yet
     token0.usdVolume += inputVolume
     token1.usdVolume += inputVolume
 
@@ -315,4 +408,3 @@ function updateUSDPrice(token0: Token, token1: Token, inputAmount: BigDecimal, o
   }
 }
 
-export function handleTransfer(event: Transfer): void {}

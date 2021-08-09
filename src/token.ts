@@ -15,6 +15,7 @@ import { convertToDecimal, ZERO_BD, ZERO_BI, ONE_BD } from "./math"
 export const WETH10_ADDRESS = "0x4f5704d9d2cbccaf11e70b34048d41a0d572993f"
 export const WETH_ADDRESS   = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 export const DAI_ADDRESS    = "0x6b175474e89094c44da98b954eedeac495271d0f"
+export const SCX_ADDRESS    = "0x1b8568fbb47708e9e9d31ff303254f748805bf21"
 
 export function isETH(token: Token): boolean {
   return token.id == WETH10_ADDRESS || token.id == WETH_ADDRESS
@@ -101,8 +102,17 @@ export class StaticToken {
   static getStaticDefinitions(): Array<StaticToken> {
     let staticDefinitions = new Array<StaticToken>(1)
 
-    // Maker
+    // Scarcity
     let token = new StaticToken(
+      Address.fromString('0x1b8568fbb47708e9e9d31ff303254f748805bf21'),
+      'SCX',
+      'Scarcity',
+      BigInt.fromI32(18)
+    )
+    staticDefinitions.push(token)
+
+    // Maker
+    token = new StaticToken(
       Address.fromString('0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2'),
       'MKR',
       'Maker',

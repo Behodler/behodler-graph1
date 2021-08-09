@@ -4,11 +4,30 @@ type Swap @entity {
   transaction: String!#Transaction!
   # timestamp from block seconds since epoch
   timestamp: BigInt!
+
   sender: Bytes!
   inputToken: Token!
   outputToken: Token!
   inputAmount: BigDecimal!
   outputAmount: BigDecimal!
+}
+
+enum LiquidityDirection {
+  Add
+  Withdraw
+}
+
+type Liquidity @entity {
+  id: ID!
+  # transaction from block
+  transaction: String!#Transaction!
+  # timestamp from block seconds since epoch
+  timestamp: BigInt!
+
+  direction: LiquidityDirection!
+  token: Token!
+  amount: BigDecimal!
+  scx: BigDecimal!
 }
 
 type Token @entity
@@ -56,4 +75,6 @@ type Behodler @entity {
 
   ethLiquidity: BigDecimal!
   usdLiquidity: BigDecimal!
+
+  liquidityBlock: BigInt
 }
