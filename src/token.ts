@@ -7,7 +7,10 @@ import {
 import { ERC20 } from '../generated/Behodler/ERC20'
 import { ERC20SymbolBytes } from '../generated/Behodler/ERC20SymbolBytes'
 import { ERC20NameBytes } from '../generated/Behodler/ERC20NameBytes'
-import { Token } from "../generated/schema"
+import {
+  Token,
+  Behodler as BehodlerEntity
+} from "../generated/schema"
 import { convertToDecimal, ZERO_BD, ZERO_BI, ONE_BD } from "./math"
 
 
@@ -16,6 +19,25 @@ export const WETH10_ADDRESS = "0x4f5704d9d2cbccaf11e70b34048d41a0d572993f"
 export const WETH_ADDRESS   = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
 export const DAI_ADDRESS    = "0x6b175474e89094c44da98b954eedeac495271d0f"
 export const SCX_ADDRESS    = "0x1b8568fbb47708e9e9d31ff303254f748805bf21"
+
+export function getBehodlerSingleton() : BehodlerEntity {
+    // save token in Behodler singleton
+    let behodler = BehodlerEntity.load('1')
+
+    // if we haven't ever created the static Behodler singleton, create it now
+    if(behodler == null){
+      behodler = new BehodlerEntity('1')
+      behodler.ethVolume = ZERO_BD
+      behodler.usdVolume = ZERO_BD
+      behodler.ethLiquidity = ZERO_BD
+      behodler.usdLiquidity = ZERO_BD
+      behodler.tokens = []
+
+      behodler.block = ZERO_BI
+    }
+
+    return <BehodlerEntity>behodler
+}
 
 export function isETH(token: Token): boolean {
   return token.id == WETH10_ADDRESS || token.id == WETH_ADDRESS
@@ -32,11 +54,12 @@ export function getToken(tokenAddress: Address): Token | null {
 
   // new token?
   if (token === null) {
+
+
     // yes, fetch info and create new token
     token = new Token(tokenAddress.toHexString())
     token.symbol = fetchTokenSymbol(tokenAddress)
     token.name = fetchTokenName(tokenAddress)
-    token.totalSupply = fetchTokenTotalSupply(tokenAddress)
     let decimals = fetchTokenDecimals(tokenAddress)
 
     if (decimals === null) {
@@ -45,6 +68,10 @@ export function getToken(tokenAddress: Address): Token | null {
     }
 
     token.decimals = decimals
+
+    let totalSupply = fetchTokenTotalSupply(tokenAddress)
+    token.totalSupply = convertToDecimal(totalSupply, decimals)
+
     if(isETH(<Token>token)){
       token.eth = ONE_BD
     } else {
@@ -76,6 +103,14 @@ export function getToken(tokenAddress: Address): Token | null {
     */
 
     token.save()
+
+    let behodler = getBehodlerSingleton()
+
+    let tokens = behodler.tokens
+    tokens.push(token.id)
+    behodler.tokens = tokens
+
+    behodler.save()
   }
 
   return token
@@ -214,12 +249,23 @@ export function fetchTokenName(tokenAddress: Address): string {
 
 export function fetchTokenTotalSupply(tokenAddress: Address): BigInt {
   let contract = ERC20.bind(tokenAddress)
-  let totalSupplyValue = null
+  let totalSupplyValue = ZERO_BI
   let totalSupplyResult = contract.try_totalSupply()
   if (!totalSupplyResult.reverted) {
-    totalSupplyValue = totalSupplyResult as i32
+    totalSupplyValue = totalSupplyResult.value
   }
-  return BigInt.fromI32(totalSupplyValue as i32)
+  return totalSupplyValue
+}
+
+export function fetchTokenBalanceOf(tokenAddress: Address, holderAddress: Address): BigInt {
+  let contract = ERC20.bind(tokenAddress)
+  let balance = ZERO_BI
+  let balanceResult = contract.try_balanceOf(holderAddress)
+  if (!balanceResult.reverted) {
+    balance = balanceResult.value
+  }
+
+  return balance
 }
 
 export function fetchTokenDecimals(tokenAddress: Address): BigInt {

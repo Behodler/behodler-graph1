@@ -16,10 +16,12 @@ import {
   Liquidity,
   Behodler as BehodlerEntity
 } from "../generated/schema"
-import { getToken, isETH, isUSD, SCX_ADDRESS } from "./token"
+import { getToken, isETH, isUSD, SCX_ADDRESS, fetchTokenBalanceOf, getBehodlerSingleton } from "./token"
 import { convertToDecimal, ZERO_BD, ZERO_BI, TWO_BD } from "./math"
 
 let DEFAULT_DECIMAL = BigInt.fromI32(18)
+
+let ONE = BigInt.fromString("1000000000000000000")
 
 /*
 
@@ -92,6 +94,54 @@ export function handleApproval(event: Approval): void {
 }
 */
 
+/**
+ * Block handler runs once per block that has a call to the contract (when specified with a call filter)
+ * https://thegraph.com/docs/developer/create-subgraph-hosted#block-handlers
+ *
+ * This is a convenient way to calculate liquidity because it runs after all other handlers
+ *
+ * Unfortunately it's broken right now: https://github.com/graphprotocol/graph-node/issues/2314
+ * so, we call it manually once at the beginning of a swap
+
+ */
+export function handleBlock(block: ethereum.Block) : void {
+
+  let behodler = getBehodlerSingleton()
+
+  behodler.ethLiquidity = ZERO_BD
+  behodler.usdLiquidity = ZERO_BD
+
+  // get list of all tokens
+  let tokens = behodler.tokens
+
+  let token : Token | null = null
+  let scxAddress = Address.fromString(SCX_ADDRESS)
+
+  for (let i = 0; i < tokens.length; i++) {
+    token = Token.load(tokens[i])
+
+    if(token == null){
+      token.liquidity = ZERO_BD
+      continue
+    }
+
+    // call balanceOf on each token with the SCX/Behodler address
+    let balanceOf = fetchTokenBalanceOf(Address.fromString(token.id), scxAddress)
+
+    let balance = convertToDecimal(balanceOf, token.decimals)
+
+    token.liquidity = balance
+
+    behodler.ethLiquidity += token.liquidity * token.eth
+    behodler.usdLiquidity += token.liquidity * token.usd
+
+    token.save()
+  }
+
+
+  behodler.save()
+}
+
 export function handleApproval(event: Approval): void {}
 
 export function handleBurn(event: Burn): void {}
@@ -106,6 +156,8 @@ export function handleLiquidityAdded(event: LiquidityAddedEvent): void {
         uint256 scx
     )
     */
+  // recommended in docs (https://thegraph.com/docs/developer/create-subgraph-hosted#recommended-ids-for-creating-new-entities)
+  // event.transaction.hash.toHex() + "-" + event.logIndex.toString()
   let liquidity = new Liquidity(event.transaction.hash.toHexString())
 
   let token = getToken(event.params.token)
@@ -239,6 +291,17 @@ export function handleSwap(event: SwapEvent): void {
   updateVolume(<Token>token0, <Token>token1, inputAmount, outputAmount)
 
 
+  // this whole section is a hack to workaround the bug that prevents
+  // blockhandlers from running when specified with a call filter
+  // when that bug gets fixed remove this section and the 'block' property from the singleton
+  // https://github.com/graphprotocol/graph-node/issues/2314
+  let behodler = getBehodlerSingleton()
+
+  if(behodler.block < event.block.number){
+    behodler.block = event.block.number
+    behodler.save()
+    handleBlock(event.block)
+  }
 
 }
 
@@ -250,16 +313,7 @@ export function handleTransfer(event: Transfer): void {}
  */
 function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal): void {
 
-  let behodler = BehodlerEntity.load('1')
-
-  // if we haven't ever created the static Behodler singleton, create it now
-  if(behodler == null){
-    behodler = new BehodlerEntity('1')
-    behodler.ethVolume = ZERO_BD
-    behodler.usdVolume = ZERO_BD
-    behodler.ethLiquidity = ZERO_BD
-    behodler.usdLiquidity = ZERO_BD
-  }
+  let behodler = getBehodlerSingleton()
 
   token0.volume += inputAmount
   token1.volume += outputAmount

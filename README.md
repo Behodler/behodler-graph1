@@ -6,12 +6,17 @@ example queries:
 Get a list of all tokens ever used in swaps
 ```
 {
-  tokens{
-    id
+  tokens(orderBy: ethBlock, orderDirection: desc){
     name
     symbol
+    decimals
     eth
     usd
+    volume
+    ethVolume
+    usdVolume
+    liquidity
+    totalSupply
   }
 }
 ```

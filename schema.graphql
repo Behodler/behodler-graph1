@@ -41,10 +41,10 @@ type Token @entity
   decimals: BigInt!
 
   # used for other stats like marketcap
-  totalSupply: BigInt!
+  totalSupply: BigDecimal
 
   # latest value in ETH
-  eth: BigDecimal
+  eth: BigDecimal!
 
   # last update time for eth value
   ethTimestamp: BigInt
@@ -53,7 +53,7 @@ type Token @entity
   ethBlock: BigInt
 
   # latest value in USD
-  usd: BigDecimal
+  usd: BigDecimal!
   usdTimestamp: BigInt
   usdBlock: BigInt
 
@@ -64,6 +64,10 @@ type Token @entity
   ethVolume: BigDecimal
   # sum of all token swapped valued in USD at the time of the transaction
   usdVolume: BigDecimal
+
+  # total amount held
+  liquidity: BigDecimal
+
 }
 
 type Behodler @entity {
@@ -76,5 +80,7 @@ type Behodler @entity {
   ethLiquidity: BigDecimal!
   usdLiquidity: BigDecimal!
 
-  liquidityBlock: BigInt
+  tokens: [Token!]!
+
+  block: BigInt!
 }
