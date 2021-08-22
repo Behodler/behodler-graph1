@@ -1,6 +1,86 @@
-type ExampleEntity @entity {
+type Swap @entity {
   id: ID!
-  count: BigInt!
-  owner: Bytes! # address
-  spender: Bytes! # address
+  # transaction from block
+  transaction: String!#Transaction!
+  # timestamp from block seconds since epoch
+  timestamp: BigInt!
+
+  sender: Bytes!
+  inputToken: Token!
+  outputToken: Token!
+  inputAmount: BigDecimal!
+  outputAmount: BigDecimal!
+}
+
+enum LiquidityDirection {
+  Add
+  Withdraw
+}
+
+type Liquidity @entity {
+  id: ID!
+  # transaction from block
+  transaction: String!#Transaction!
+  # timestamp from block seconds since epoch
+  timestamp: BigInt!
+
+  direction: LiquidityDirection!
+  token: Token!
+  amount: BigDecimal!
+  scx: BigDecimal!
+}
+
+type Token @entity
+{
+  # token address
+  id: ID!
+
+  # mirrored from the smart contract
+  symbol: String!
+  name: String!
+  decimals: BigInt!
+
+  # used for other stats like marketcap
+  totalSupply: BigDecimal
+
+  # latest value in ETH
+  eth: BigDecimal!
+
+  # last update time for eth value
+  ethTimestamp: BigInt
+
+  # last update block for eth value
+  ethBlock: BigInt
+
+  # latest value in USD
+  usd: BigDecimal!
+  usdTimestamp: BigInt
+  usdBlock: BigInt
+
+  # sum of all token swapped
+  volume: BigDecimal
+
+  # sum of all token swapped valued in ETH at the time of the transaction
+  ethVolume: BigDecimal
+  # sum of all token swapped valued in USD at the time of the transaction
+  usdVolume: BigDecimal
+
+  # total amount held
+  liquidity: BigDecimal
+
+}
+
+type Behodler @entity {
+
+  id: ID!
+
+  ethVolume: BigDecimal!
+  usdVolume: BigDecimal!
+
+  ethLiquidity: BigDecimal!
+  usdLiquidity: BigDecimal!
+
+  tokens: [Token!]!
+
+  block: BigInt!
 }
