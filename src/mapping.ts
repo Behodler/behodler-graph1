@@ -18,7 +18,6 @@ import {
 } from "../generated/schema"
 import { getToken, isETH, isUSD, SCX_ADDRESS, fetchTokenBalanceOf, getBehodlerSingleton } from "./token"
 import { convertToDecimal, ZERO_BD, ZERO_BI, TWO_BD } from "./math"
-import { updateDayLiquidityAdded, updateDayLiquidityWithdrawn, updateBehodlerDayVolumeETH, updateBehodlerDayVolumeUSD } from "./dayUpdates"
 
 let DEFAULT_DECIMAL = BigInt.fromI32(18)
 
@@ -133,8 +132,8 @@ export function handleBlock(block: ethereum.Block) : void {
 
     token.liquidity = balance
 
-    behodler.ethLiquidity = behodler.ethLiquidity.plus(token.liquidity.times(token.eth))
-    behodler.usdLiquidity = behodler.usdLiquidity.plus(token.liquidity.times(token.usd))
+    behodler.ethLiquidity += token.liquidity * token.eth
+    behodler.usdLiquidity += token.liquidity * token.usd
 
     token.save()
   }
@@ -188,9 +187,6 @@ export function handleLiquidityAdded(event: LiquidityAddedEvent): void {
   //updateVolume(<Token>token, <Token>scxToken, amount, scxAmount)
 
   scxToken.save()
-  
-  // Update daily data
-  updateDayLiquidityAdded(event)
 }
 
 export function handleLiquidityWithdrawn(event: LiquidityWithdrawnEvent): void {
@@ -234,8 +230,7 @@ export function handleLiquidityWithdrawn(event: LiquidityWithdrawnEvent): void {
 
   scxToken.save()
 
-  // Update daily data
-  updateDayLiquidityWithdrawn(event)
+
 }
 
 
@@ -293,7 +288,8 @@ export function handleSwap(event: SwapEvent): void {
   updateETHPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
   updateUSDPrice(<Token>token0, <Token>token1, inputAmount, outputAmount, event.block)
 
-  updateVolume(<Token>token0, <Token>token1, inputAmount, outputAmount, event)
+  updateVolume(<Token>token0, <Token>token1, inputAmount, outputAmount)
+
 
   // this whole section is a hack to workaround the bug that prevents
   // blockhandlers from running when specified with a call filter
@@ -315,66 +311,60 @@ export function handleTransfer(event: Transfer): void {}
 /**
  * Update the volume information for both tokens based on a swap.
  */
-function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, event: SwapEvent): void {
+function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal): void {
 
   let behodler = getBehodlerSingleton()
 
-  token0.volume = token0.volume.times(inputAmount)
-  token1.volume = token1.volume.times(outputAmount)
+  token0.volume += inputAmount
+  token1.volume += outputAmount
 
-  let inputVolume = inputAmount.times(<BigDecimal>token0.eth)
-  let outputVolume = outputAmount.times(<BigDecimal>token1.eth)
+  let inputVolume = inputAmount*<BigDecimal>token0.eth
+  let outputVolume = outputAmount*<BigDecimal>token1.eth
 
   if(inputVolume > ZERO_BD && outputVolume > ZERO_BD){
     // volume amounts should theoretically be the same, but in practice won't be
     // we average to get a better approximation to the actual value
-    token0.ethVolume = token0.ethVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
-    token1.ethVolume = token1.ethVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
+    token0.ethVolume += (inputVolume + outputVolume) / TWO_BD
+    token1.ethVolume += (inputVolume + outputVolume) / TWO_BD
 
-    behodler.ethVolume = behodler.ethVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
-    updateBehodlerDayVolumeETH(event, (inputVolume.plus(outputVolume)).div(TWO_BD))
+    behodler.ethVolume += (inputVolume + outputVolume) / TWO_BD
 
   } else if(inputVolume > ZERO_BD){
     // this section uses a single volume value in case one token doesn't have an eth value yet
-    token0.ethVolume = token0.ethVolume.plus(inputVolume)
-    token1.ethVolume = token1.ethVolume.plus(inputVolume)
+    token0.ethVolume += inputVolume
+    token1.ethVolume += inputVolume
 
-    behodler.ethVolume = behodler.ethVolume.plus(inputVolume)
-    updateBehodlerDayVolumeETH(event, inputVolume)
+    behodler.ethVolume += inputVolume
   } else if(outputVolume > ZERO_BD){
-    token0.ethVolume = token0.ethVolume.plus(outputVolume)
-    token1.ethVolume = token1.ethVolume.plus(outputVolume)
+    token0.ethVolume += outputVolume
+    token1.ethVolume += outputVolume
 
-    behodler.ethVolume = behodler.ethVolume.plus(outputVolume)
-    updateBehodlerDayVolumeETH(event, outputVolume)
+    behodler.ethVolume += outputVolume
   }
 
   // Do the same thing for USD
-  inputVolume = inputAmount.times(<BigDecimal>token0.usd)
-  outputVolume = outputAmount.times(<BigDecimal>token1.usd)
+  inputVolume = inputAmount*<BigDecimal>token0.usd
+  outputVolume = outputAmount*<BigDecimal>token1.usd
 
   if(inputVolume > ZERO_BD && outputVolume > ZERO_BD){
     // volume amounts should theoretically be the same, but in practice won't be
     // we average to get a better approximation to the actual value
-    token0.usdVolume = token0.usdVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
-    token1.usdVolume = token1.usdVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
+    token0.usdVolume += (inputVolume + outputVolume) / TWO_BD
+    token1.usdVolume += (inputVolume + outputVolume) / TWO_BD
 
-    behodler.usdVolume = behodler.usdVolume.plus( (inputVolume.plus(outputVolume)).div(TWO_BD) )
-    updateBehodlerDayVolumeUSD(event, (inputVolume.plus(outputVolume)).div(TWO_BD))
+    behodler.usdVolume += (inputVolume + outputVolume) / TWO_BD
 
   } else if(inputVolume > ZERO_BD){
     // this section uses a single volume value in case one token doesn't have a usd value yet
-    token0.usdVolume = token0.usdVolume.plus(inputVolume)
-    token1.usdVolume = token1.usdVolume.plus(inputVolume)
+    token0.usdVolume += inputVolume
+    token1.usdVolume += inputVolume
 
-    behodler.usdVolume = behodler.usdVolume.plus(inputVolume)
-    updateBehodlerDayVolumeUSD(event, inputVolume)
+    behodler.usdVolume += inputVolume
   } else if(outputVolume > ZERO_BD){
-    token0.usdVolume = token0.usdVolume.plus(outputVolume)
-    token1.usdVolume = token1.usdVolume.plus(outputVolume)
+    token0.usdVolume += outputVolume
+    token1.usdVolume += outputVolume
 
-    behodler.usdVolume = behodler.usdVolume.plus(outputVolume)
-    updateBehodlerDayVolumeUSD(event, outputVolume)
+    behodler.usdVolume += outputVolume
   }
 
   token0.save()
@@ -391,40 +381,38 @@ function updateVolume(token0: Token, token1: Token, inputAmount: BigDecimal, out
  */
 function updateETHPrice(token0: Token, token1: Token, inputAmount: BigDecimal, outputAmount: BigDecimal, block: ethereum.Block): void {
 
-  if (inputAmount > ZERO_BD && outputAmount > ZERO_BD) {
-    // is the first token ETH?
-    if(isETH(token0)){
-      // yes, update the other token
-      token1.eth = inputAmount.div(outputAmount)
-      token1.ethTimestamp = block.timestamp
-      token1.ethBlock = block.number
+  // is the first token ETH?
+  if(isETH(token0)){
+    // yes, update the other token
+    token1.eth = inputAmount / outputAmount
+    token1.ethTimestamp = block.timestamp
+    token1.ethBlock = block.number
+
+    token1.save()
+  } else if(isETH(token1)){
+    // second token is ETH, update first
+    token0.eth = outputAmount / inputAmount
+    token0.ethTimestamp = block.timestamp
+    token0.ethBlock = block.number
+
+    token0.save()
+  } else if(token0.ethBlock !== null || token1.ethBlock !== null){
+    // neither is ETH, check last update block
+
+    // propagate eth price between tokens from more recent blocks
+    if(<BigInt>token0.ethBlock > <BigInt>token1.ethBlock) {
+      token1.eth = (token0.eth *  inputAmount) / outputAmount
+      token1.ethBlock = token0.ethBlock
+      token1.ethTimestamp = token0.ethTimestamp
 
       token1.save()
-    } else if(isETH(token1)){
-      // second token is ETH, update first
-      token0.eth = outputAmount.div(inputAmount)
-      token0.ethTimestamp = block.timestamp
-      token0.ethBlock = block.number
+
+    } else if(<BigInt>token1.ethBlock > <BigInt>token0.ethBlock) {
+      token0.eth = (token1.eth * outputAmount) / inputAmount
+      token0.ethBlock = token1.ethBlock
+      token0.ethTimestamp = token1.ethTimestamp
 
       token0.save()
-    } else if(token0.ethBlock !== null || token1.ethBlock !== null){
-      // neither is ETH, check last update block
-
-      // propagate eth price between tokens from more recent blocks
-      if(<BigInt>token0.ethBlock > <BigInt>token1.ethBlock) {
-        token1.eth = (token0.eth.times(inputAmount)).div(outputAmount)
-        token1.ethBlock = token0.ethBlock
-        token1.ethTimestamp = token0.ethTimestamp
-
-        token1.save()
-
-      } else if(<BigInt>token1.ethBlock > <BigInt>token0.ethBlock) {
-        token0.eth = (token1.eth.times(outputAmount)).div(inputAmount)
-        token0.ethBlock = token1.ethBlock
-        token0.ethTimestamp = token1.ethTimestamp
-
-        token0.save()
-      }
     }
   }
 }
@@ -441,14 +429,14 @@ function updateUSDPrice(token0: Token, token1: Token, inputAmount: BigDecimal, o
   // is the first token USD?
   if(isUSD(token0)){
     // yes, update second token
-    token1.usd = inputAmount.div(outputAmount)
+    token1.usd = inputAmount / outputAmount
     token1.usdTimestamp = block.timestamp
     token1.usdBlock = block.number
 
     token1.save()
   } else if(isUSD(token1)){
     // second token is USD, update first
-    token0.usd = outputAmount.div(inputAmount)
+    token0.usd = outputAmount / inputAmount
     token0.usdTimestamp = block.timestamp
     token0.usdBlock = block.number
 
@@ -458,14 +446,14 @@ function updateUSDPrice(token0: Token, token1: Token, inputAmount: BigDecimal, o
 
     // propagate usd price between tokens from more recent blocks
     if(<BigInt>token0.usdBlock > <BigInt>token1.usdBlock) {
-      token1.usd = (token0.usd.times(inputAmount)).div(outputAmount)
+      token1.usd = (token0.usd * inputAmount) / outputAmount
       token1.usdBlock = token0.usdBlock
       token1.usdTimestamp = token0.usdTimestamp
 
       token1.save()
 
     } else if(<BigInt>token1.usdBlock > <BigInt>token0.usdBlock) {
-      token0.usd = (token1.usd.times(outputAmount)).div(inputAmount)
+      token0.usd = (token1.usd * outputAmount) / inputAmount
       token0.usdBlock = token1.usdBlock
       token0.usdTimestamp = token1.usdTimestamp
 

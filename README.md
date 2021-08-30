@@ -57,22 +57,6 @@ Get total swap volume (all swaps) and current liquidity
 }
 ```
 
-Get daily swap volume (all swaps) and current liquidity
-```
-{
-  behodlerDayDatas(orderBy: date, orderDirection: desc) {
-    id
-    date
-    dailyVolumeETH
-    dailyVolumeUSD
-    totalVolumeETH
-    totalVolumeUSD
-    totalLiquidityETH
-    totalLiquidityUSD
-  }
-}
-```
-
 Get a list of all liquidity transactions, most recent first
 ```
 {
