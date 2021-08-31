@@ -50,7 +50,7 @@ type Token @entity
   ethTimestamp: BigInt
 
   # last update block for eth value
-  ethBlock: BigInt
+  ethBlock: BigInt!
 
   # latest value in USD
   usd: BigDecimal!
